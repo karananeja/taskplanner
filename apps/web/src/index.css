@@ -1,0 +1,82 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #f8f8fb;
+  --foreground: #17171f;
+  --card: #ffffff;
+  --card-foreground: #17171f;
+  --popover: #ffffff;
+  --popover-foreground: #17171f;
+  --muted: #efeff4;
+  --muted-foreground: #686878;
+  --border: #e3e3eb;
+  --input: #d9d9e3;
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+  --accent: #ececfe;
+  --accent-foreground: #4338ca;
+  --destructive: #dc2626;
+  --warning: #d97706;
+  --ring: #818cf8;
+  --sidebar: #f1f1f6;
+}
+
+.dark {
+  --background: #0a0a0b;
+  --foreground: #ececf1;
+  --card: #111113;
+  --card-foreground: #ececf1;
+  --popover: #16161a;
+  --popover-foreground: #ececf1;
+  --muted: #1a1a1e;
+  --muted-foreground: #8d8d9a;
+  --border: #232328;
+  --input: #2c2c33;
+  --primary: #7c7ff5;
+  --primary-foreground: #ffffff;
+  --accent: #1c1c2e;
+  --accent-foreground: #a5a8ff;
+  --destructive: #ef4444;
+  --warning: #f59e0b;
+  --ring: #7c7ff5;
+  --sidebar: #0d0d0f;
+}
+
+@theme inline {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-warning: var(--warning);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+}
+
+@layer base {
+  * { @apply border-border; }
+  html, body, #root { height: 100%; }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+  :focus-visible { @apply outline-2 outline-offset-2 outline-ring; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "taskplanner",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "setup": "node scripts/ensure-env.mjs && npm run db:migrate -w @tp/api && npm run db:seed -w @tp/api",
+    "dev": "concurrently -n api,web -c blue,magenta \"npm run dev -w @tp/api\" \"npm run dev -w @tp/web\"",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:coverage": "npm run test:coverage --workspaces --if-present",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:all": "npm test && npm run test:e2e"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0",
+    "typescript": "~5.9.2",
+    "@playwright/test": "~1.56.1"
+  },
+  "engines": {
+    "node": ">=20.19"
+  }
+}

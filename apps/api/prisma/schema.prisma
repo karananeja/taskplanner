@@ -1,0 +1,273 @@
+// Task planner schema. Enum-like columns are strings validated by @tp/shared (Zod),
+// so the same schema works if you later move from SQLite to Postgres.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String?
+  googleId     String?  @unique
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+
+  sessions       Session[]
+  memberships    Membership[]
+  createdTasks   Task[]          @relation("TaskCreator")
+  assignments    TaskAssignee[]
+  ownerships     TaskOwner[]
+  comments       Comment[]
+  activities     Activity[]
+  changeRequests ChangeRequest[] @relation("Requester")
+  reviews        ChangeRequest[] @relation("Reviewer")
+  notifications  Notification[]  @relation("Recipient")
+  sentNotifications Notification[] @relation("Actor")
+  docs              Doc[]
+}
+
+model Session {
+  id        String   @id // sha256 of the cookie token; the raw token is never stored
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  userAgent String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Workspace {
+  id         String   @id @default(cuid())
+  name       String
+  inviteCode String   @unique
+  createdAt  DateTime @default(now())
+
+  memberships   Membership[]
+  tasks         Task[]
+  labels        Label[]
+  clients       Client[]
+  notifications Notification[]
+  docs          Doc[]
+}
+
+model Membership {
+  id          String   @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        String   @default("MEMBER") // OWNER | MEMBER
+  notifyPrefs String   @default("{}") // JSON: { [NotificationType]: false } mutes that type
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId])
+}
+
+model Label {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  color       String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks     TaskLabel[]
+
+  @@unique([workspaceId, name])
+}
+
+model Client {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  email       String?
+  phone       String?
+  color       String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+  docs      Doc[]
+
+  @@index([workspaceId])
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  workspaceId String
+  title       String
+  description String    @default("")
+  status      String    @default("TODO")
+  priority    String    @default("NONE")
+  position    String // fractional index, ordered within a status column
+  clientId    String?
+  parentId    String?
+  startDate   String? // YYYY-MM-DD
+  endDate     String?
+  dueDate     String?
+  version     Int       @default(1) // bumped on every edit, used to detect conflicting saves
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  client         Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  parent         Task?           @relation("Subtasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks       Task[]          @relation("Subtasks")
+  createdBy      User            @relation("TaskCreator", fields: [createdById], references: [id])
+  assignees      TaskAssignee[]
+  owners         TaskOwner[]
+  labels         TaskLabel[]
+  checklist      ChecklistItem[]
+  comments       Comment[]
+  activities     Activity[]
+  changeRequests ChangeRequest[]
+  notifications  Notification[]
+
+  @@index([workspaceId, status, position])
+  @@index([parentId])
+}
+
+model TaskAssignee {
+  taskId String
+  userId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([userId])
+}
+
+model TaskOwner {
+  taskId String
+  userId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([userId])
+}
+
+model TaskLabel {
+  taskId  String
+  labelId String
+  task    Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label   Label  @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+}
+
+model ChecklistItem {
+  id        String   @id @default(cuid())
+  taskId    String
+  text      String
+  done      Boolean  @default(false)
+  position  Int
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  taskId     String
+  authorId   String
+  body       String
+  mentionIds String   @default("[]") // JSON array of user ids
+  createdAt  DateTime @default(now())
+
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+}
+
+model ChangeRequest {
+  id          String    @id @default(cuid())
+  taskId      String
+  requesterId String
+  changes     String // JSON: Partial<TaskFields>
+  previous    String // JSON: the same fields' values when requested
+  baseVersion Int
+  status      String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  reviewerId  String?
+  reviewNote  String?
+  createdAt   DateTime  @default(now())
+  reviewedAt  DateTime?
+
+  task      Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  requester User  @relation("Requester", fields: [requesterId], references: [id], onDelete: Cascade)
+  reviewer  User? @relation("Reviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([taskId, status])
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  taskId    String
+  actorId   String
+  type      String
+  data      String   @default("{}") // JSON payload, shape depends on type
+  createdAt DateTime @default(now())
+
+  task  Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor User @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+}
+
+/// Stored now so the Inbox milestone only has to display them.
+model Notification {
+  id          String    @id @default(cuid())
+  userId      String
+  workspaceId String
+  type        String // ASSIGNED | MENTIONED | CHANGE_REQUESTED | CHANGE_APPROVED | CHANGE_REJECTED
+  taskId      String?
+  actorId     String?
+  data        String    @default("{}")
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  user      User      @relation("Recipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor     User?     @relation("Actor", fields: [actorId], references: [id], onDelete: SetNull)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  task      Task?     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([userId, workspaceId, readAt])
+}
+
+/// A written doc, or an uploaded file (then `fileData` holds the bytes and `body` is unused).
+model Doc {
+  id          String   @id @default(cuid())
+  workspaceId String
+  clientId    String?
+  title       String
+  body        String   @default("")
+  fileName    String?
+  fileType    String?
+  fileSize    Int?
+  fileData    Bytes?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  client    Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  createdBy User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, updatedAt])
+}
